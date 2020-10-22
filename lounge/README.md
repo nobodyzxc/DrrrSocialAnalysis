@@ -1,3 +1,3 @@
 # Lounge Data Here
 
-`make lounge` to download lounge data.
+`make data` to download lounge data.
