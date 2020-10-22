@@ -1,6 +1,6 @@
 import os, sys, json
 from pprint import pprint
-from data import DATA_DIR, jsonFiles, match
+from data import jsonFiles, match
 
 if len(sys.argv) <= 1:
     print('Usage: python {} [name | "#tripcode"]'.format(sys.argv[0]))

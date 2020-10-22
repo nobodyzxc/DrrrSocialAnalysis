@@ -1,6 +1,6 @@
 import os, sys, json
 from pprint import pprint
-from data import DATA_DIR, match, jsonFiles
+from data import match, jsonFiles
 
 
 users = set()
