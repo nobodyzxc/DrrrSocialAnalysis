@@ -1,0 +1,106 @@
+import os, sys, json
+from math import log
+from pprint import pprint
+from data import jsonFiles, match
+from service import run_http, open_web, host_timezone, fn_as_path
+import threading
+
+def findFriends(rule, fuzzy=True):
+    friends = set()
+    fnames = set()
+    fcodes = set()
+    for filename in jsonFiles:
+        rooms = json.loads(open(filename).read())
+        for room in rooms:
+            for user in room['users']:
+                if match(user, rule, fuzzy):
+                    for u in room['users']:
+                        fn, fc = u['name'], u.get('tripcode', '')
+                        fnames.add(fn)
+                        if fc: fcodes.add(fc)
+                    friends.update([(u['name'], u.get('tripcode', '')) for u in room['users']])
+    return friends, fnames, fcodes
+
+def normalize(v):
+    return log(v) + 1
+
+def count_link(friends, fnames, fcodes):
+    links = dict()
+    for filename in jsonFiles:
+        rooms = json.loads(open(filename).read())
+        for room in rooms:
+            names = [u['name'] for u in room['users'] if u['name'] in fnames]
+            names.sort()
+            for i in range(len(names)):
+                for j in range(i + 1, len(names)):
+                    key = (names[i], names[j])
+                    links[key] = links.get(key, 0) + 1
+    return links
+
+def folding_nodes_links(fs, fns, fcs, freqs):
+
+    tc2names = {tc: set() for tc in fcs}
+    name2tc = dict()
+
+    for n, c in fs:
+        if c: tc2names.setdefault(c, set()).add(n)
+    for tc in tc2names:
+        for name in tc2names[tc]:
+            name2tc[name] = tc
+
+    def fold_name(name):
+        if name in name2tc:
+            return list(tc2names[name2tc[name]])[0]
+        return name
+
+    names = set([fold_name(n) for n in fns])
+    nodes = [{'id': n, 'group': i} for i, n in enumerate(names)]
+
+    counts = dict()
+    lnames = set()
+    for a, b in freqs:
+        key = tuple(sorted([fold_name(a), fold_name(b)]))
+        lnames.add(key[0])
+        lnames.add(key[1])
+        counts[key] = counts.get(key, 0) + freqs[(a, b)]
+
+    if len(lnames) != len(names):
+        print(lnames - names)
+        exit(0)
+
+    links = [{'source': a, 'target': b, 'value': normalize(counts[(a, b)])} for a, b in counts]
+
+    return nodes, links
+
+def raw_nodes_links(fs, fns, fcs, freqs):
+
+    nodes, links = [], []
+    tcs = {c: i for i, c in enumerate(fcs)}
+    index = len(tcs)
+
+    for n, c in fs:
+        if c and c in tcs:
+            nodes.append({'id': n, "group": tcs[c]})
+        else:
+            nodes.append({'id': n, "group": index})
+            #index += 1
+
+    for a, b in freqs:
+        links.append({'source': a, 'target': b, 'value': normalize(freqs[(a, b)])})
+
+    return nodes, links
+
+def main(rule, fuzzy=True):
+    fs, fns, fcs = findFriends(rule, fuzzy)
+    freqs = count_link(fs, fns, fcs)
+    #nodes, links = raw_nodes_links(fs, fns, fcs, freqs)
+    nodes, links = folding_nodes_links(fs, fns, fcs, freqs)
+    fd = open(os.path.join(fn_as_path(), 'files', 'data.json'), 'w')
+    print(json.dumps({'nodes': nodes, 'links': links}, indent=2), file=fd)
+
+if __name__ == '__main__':
+    main(sys.argv[1] if len(sys.argv) > 1 else "#L/CaT//Hsk")
+    t = threading.Thread(target = open_web, args = ('http://localhost:8000/',))
+    t.start()
+    run_http()
+    t.join()
